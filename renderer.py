@@ -23,9 +23,52 @@ done = False
 boundary = [400, 400]
 screen = pygame.display.set_mode(boundary)
 
+def sense(dir, coord, collidables, boundary):
+    max_value = np.linalg.norm(boundary)
+    output = max_value
+    if math.cos(dir) != 0:
+        if abs(dir) < math.pi / 2:
+            output = min(
+                output, abs((coord[1] - boundary[1]) / math.cos(dir))
+            )
+        else:
+            output = min(output, abs(coord[1] / math.cos(dir)))
+    if math.sin(dir) != 0:
+        if dir > 0:
+            output = min(
+                output, abs((coord[0] - boundary[0]) / math.sin(dir))
+            )
+        else:
+            output = min(output, abs(coord[0] / math.sin(dir)))
+
+    for collidable in collidables:
+        b_dir = angle(coord, collidable.coord)
+        _dir_diff = abs(sub_angle(b_dir, dir))
+        d = dist(coord, collidable.coord)
+        if collidable.rad / d <= 1:
+            theta = math.asin(collidable.rad / d)
+            if abs(_dir_diff) < abs(theta):
+                # The collidable is in the sensor's line of sight
+                # However, the distance to the hitbox is not necessarily the distance to the collidable
+                # Here we calculate the difference
+                opposite = math.sin(_dir_diff) * d
+                adjacent = math.cos(_dir_diff) * d
+                if collidable.rad * 2 - opposite * 2 < 0:
+                    difference = 0
+                else:
+                    difference = math.sqrt(collidable.rad * 2 - opposite * 2)
+                output = min(output, adjacent - difference)
+        else:
+            return 0
+    return output
+
+@dataclasses.dataclass
+class AngleBrain(object):
+    angle_gain: float
 
 @dataclasses.dataclass
 class Tadpole(object):
+
     coords: np.ndarray = np.asarray([0, 0])
     angle: float = 0
     velocity: float = 1
@@ -34,11 +77,10 @@ class Tadpole(object):
     acceleration: np.ndarray = np.asarray([0, 0])
     # angular_acceleration: float = 0
 
-
 def step_physics(tadpole: Tadpole, acceleration, angular_velocity):
     xy_velocity = tadpole.velocity * np.asarray([np.cos(tadpole.angle), np.sin(tadpole.angle)])
     new_coords = np.mod(tadpole.coords +  xy_velocity * _DELTA_TIME, np.asarray(boundary))
-    new_angle = tadpole.angle + tadpole.angular_velocity * _DELTA_TIME
+    new_angle = np.mod(tadpole.angle + tadpole.angular_velocity * _DELTA_TIME, 2*np.pi)
 
     new_velocity = tadpole.velocity + tadpole.acceleration * _DELTA_TIME
     new_angular_velocity = angular_velocity
@@ -50,13 +92,19 @@ def step_physics(tadpole: Tadpole, acceleration, angular_velocity):
                    acceleration=acceleration)
 
 
-taddies = [Tadpole(coords=(100, 100), velocity = 100) for _ in range(100)]
 def sample_angular_velocity():
-    return 2 * np.sin(time.time() * 12.0) + np.random.rand() * 10 - 5
+    return 2 * np.sin(time.time() * 12.0) + np.random.rand() * 4 - 2
+
+def use_brain(brain: AngleBrain, tadpole: Tadpole):
+    angular_velocity = brain.angle_gain * tadpole.angle + sample_angular_velocity()
+    return angular_velocity
+
+taddies = [Tadpole(coords=(100, 100), velocity = 100, angular_velocity = np.random.rand() * 2 - 1) for _ in range(100)]
+brains = [AngleBrain(np.random.rand()* 2 -1) for taddy in taddies]
+
 
 while not done:
-
-    taddies = [step_physics(taddy, acceleration=0, angular_velocity=sample_angular_velocity()) for taddy in taddies]
+    taddies = [step_physics(taddy, acceleration=0, angular_velocity=use_brain(brain, taddy)) for brain, taddy in zip(brains, taddies)]
     for event in pygame.event.get():
         if event.type == pygame.QUIT:  # If user clicked close
             done = True
