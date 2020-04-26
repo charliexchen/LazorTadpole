@@ -18,10 +18,14 @@ CYAN = (0, 255, 255)
 MAGENTA = (255, 0, 255)
 DMAGENTA = (120, 0, 120)
 YELLOW = (255, 255, 0)
-clock = pygame.time.Clock()
-done = False
-boundary = [400, 400]
-screen = pygame.display.set_mode(boundary)
+
+class RandomPolicy(object):
+
+    def __init__(self):
+        pass
+
+    def __call__(self):
+        return np.random.uniform(-1, 1, size=2)
 
 def sense(dir, coord, collidables, boundary):
     max_value = np.linalg.norm(boundary)
@@ -62,57 +66,7 @@ def sense(dir, coord, collidables, boundary):
             return 0
     return output
 
-@dataclasses.dataclass
-class AngleBrain(object):
-    angle_gain: float
 
-@dataclasses.dataclass
-class Tadpole(object):
-
-    coords: np.ndarray = np.asarray([0, 0])
-    angle: float = 0
-    velocity: float = 1
-    angular_velocity: float = 0
-
-    acceleration: np.ndarray = np.asarray([0, 0])
-    # angular_acceleration: float = 0
-
-def step_physics(tadpole: Tadpole, acceleration, angular_velocity):
-    xy_velocity = tadpole.velocity * np.asarray([np.cos(tadpole.angle), np.sin(tadpole.angle)])
-    new_coords = np.mod(tadpole.coords +  xy_velocity * _DELTA_TIME, np.asarray(boundary))
-    new_angle = np.mod(tadpole.angle + tadpole.angular_velocity * _DELTA_TIME, 2*np.pi)
-
-    new_velocity = tadpole.velocity + tadpole.acceleration * _DELTA_TIME
-    new_angular_velocity = angular_velocity
-
-    return Tadpole(coords=new_coords,
-                   angle=new_angle,
-                   velocity=new_velocity,
-                   angular_velocity=new_angular_velocity,
-                   acceleration=acceleration)
-
-
-def sample_angular_velocity():
-    return 2 * np.sin(time.time() * 12.0) + np.random.rand() * 4 - 2
-
-def use_brain(brain: AngleBrain, tadpole: Tadpole):
-    angular_velocity = brain.angle_gain * tadpole.angle + sample_angular_velocity()
-    return angular_velocity
-
-taddies = [Tadpole(coords=(100, 100), velocity = 100, angular_velocity = np.random.rand() * 2 - 1) for _ in range(100)]
-brains = [AngleBrain(np.random.rand()* 2 -1) for taddy in taddies]
-
-
-while not done:
-    taddies = [step_physics(taddy, acceleration=0, angular_velocity=use_brain(brain, taddy)) for brain, taddy in zip(brains, taddies)]
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:  # If user clicked close
-            done = True
-    screen.fill(WHITE)
-    for taddy in taddies:
-        pygame.draw.circle(screen, BLACK, taddy.coords.astype(np.int), 5)
-    pygame.display.flip()
-    clock.tick(30)
 '''
 import pygame
 import pickle, math
